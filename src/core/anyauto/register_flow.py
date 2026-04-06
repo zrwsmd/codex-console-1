@@ -170,10 +170,14 @@ class AnyAutoRegistrationEngine:
             skymail_adapter,
         )
         if tokens and tokens.get("access_token"):
+            account_id = self._extract_account_id_from_token(tokens.get("access_token", ""))
+            if not account_id and tokens.get("id_token"):
+                account_id = self._extract_account_id_from_token(tokens.get("id_token", ""))
             return {
                 "access_token": tokens.get("access_token", ""),
                 "refresh_token": tokens.get("refresh_token", ""),
                 "id_token": tokens.get("id_token", ""),
+                "account_id": account_id or "",
                 "session": oauth_client.session,
             }
 
@@ -280,11 +284,15 @@ class AnyAutoRegistrationEngine:
                     )
                     if pwdless and pwdless.get("access_token"):
                         self.session = pwdless.get("session") or self.session
+                        account_id = pwdless.get("account_id", "")
+                        if not account_id:
+                            account_id = self._extract_account_id_from_token(pwdless.get("access_token", ""))
                         return {
                             "success": True,
                             "access_token": pwdless.get("access_token", ""),
                             "refresh_token": pwdless.get("refresh_token", ""),
                             "id_token": pwdless.get("id_token", ""),
+                            "account_id": account_id or "",
                         }
 
                 # 5. 复用 session 取 token

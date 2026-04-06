@@ -979,6 +979,13 @@ class RegistrationEngine:
         if access_token:
             result.access_token = access_token
 
+        # 从 access_token JWT 补齐 account_id（避免后续保存时字段为空）
+        if access_token and not result.account_id:
+            extracted_id = self._extract_account_id_from_access_token(access_token)
+            if extracted_id:
+                result.account_id = extracted_id
+                self._log(f"auth/session 补齐 Account ID: {extracted_id}")
+
         self._log(
             "Auth Session 捕获结果: session_token="
             + ("有" if bool(result.session_token) else "无")
@@ -2839,7 +2846,21 @@ class RegistrationEngine:
                 if not self._complete_token_exchange(result, require_login_otp=not use_abcard_entry):
                     return result
 
-            # 10. 完成
+            # 10. 安全网：确保 account_id 不为空（避免 CPA 导入报 missing ChatGPT account ID）
+            if not result.account_id and result.access_token:
+                result.account_id = self._extract_account_id_from_access_token(result.access_token)
+            if not result.account_id and result.id_token:
+                try:
+                    account_info = self.oauth_manager.extract_account_info(result.id_token)
+                    result.account_id = str(account_info.get("account_id") or "").strip()
+                except Exception:
+                    pass
+            if not result.account_id:
+                result.account_id = str(self._create_account_account_id or "").strip()
+            if not result.workspace_id:
+                result.workspace_id = result.account_id or str(self._create_account_workspace_id or "").strip()
+
+            # 完成
             self._log("=" * 60)
             if self._is_existing_account:
                 self._log("登录成功，老朋友顺利回家")
