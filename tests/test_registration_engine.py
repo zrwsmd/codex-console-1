@@ -143,6 +143,14 @@ class FakeOpenAIClient:
             self._session = self._sessions[self._session_index]
 
 
+class FailingIPClient:
+    def __init__(self, reason):
+        self.reason = reason
+
+    def check_ip_location(self):
+        return False, self.reason
+
+
 def _workspace_cookie(workspace_id):
     payload = base64.urlsafe_b64encode(
         json.dumps({"workspaces": [{"id": workspace_id}]}).encode("utf-8")
@@ -294,3 +302,15 @@ def test_existing_account_login_uses_auto_sent_otp_without_manual_send():
     assert len(email_service.otp_requests) == 1
     assert email_service.otp_requests[0]["otp_sent_at"] is not None
     assert result.metadata["token_acquired_via_relogin"] is False
+
+
+def test_run_surfaces_ip_check_failure_reason():
+    email_service = FakeEmailService([])
+    engine = RegistrationEngine(email_service)
+    engine.http_client = FailingIPClient("检查失败: SSL certificate problem")
+
+    result = engine.run()
+
+    assert result.success is False
+    assert result.error_message == "IP 地理位置检查失败: 检查失败: SSL certificate problem"
+    assert any("IP 检查失败: 检查失败: SSL certificate problem" in item for item in result.logs)
